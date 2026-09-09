@@ -70,7 +70,7 @@ vega repos list [--project <p>] [--git-remote github.com/org/repo]
 vega repos get <repo>                # state, snapshot_id, latest_scan_id, …
 vega repos scans <repo>
 
-vega scans list [--limit N]          # workspace-wide
+vega scans list [--project <p> | --repo <r>] [--limit N]
 vega scans get <scan_id> [--live]    # detail; --live adds live cost/progress
 vega scans get <scan_id> -s          # ONE line — cheapest way to poll:
 # scan_NtWy… running 49% "Auditing auth module" findings=8 cost=$260.73
@@ -80,8 +80,8 @@ vega scans get <scan_id> -s          # ONE line — cheapest way to poll:
 
 ```
 vega findings list --scan <scan_id>            # or --project <p> / --repo <r>
-# FINDING_ID     SEV     CONF  STATUS     FILE                TITLE
-# VEGA-MEDI-00001 medium  high  candidate  app/…/inline.py     Inline publish does…
+# FINDING_ID      SCAN_ID    SEV     CONF  STATUS     FILE             TITLE
+# VEGA-MEDI-00001 scan_NtWy… medium  high  candidate  app/…/inline.py  Inline publish does…
 # (stderr) total: 8  next_cursor: eyJz…
 ```
 
@@ -114,16 +114,49 @@ Triage is repository-level and requires an explicit repository scope:
 ```
 vega findings mark --repo <repo> pending|valid|invalid|fixed <finding...>
 vega findings triage --repo <repo> <status> <finding...>  # mark alias
-vega findings fix --repo <repo> <finding...>
+vega findings mark-fixed --repo <repo> <finding...>
 vega findings invalid --repo <repo> <finding...>
 vega findings ack --repo <repo> <finding...>              # valid, still open
 ```
 
-`fix`, `invalid`, and `ack` are shortcuts for `fixed`, `invalid`, and `valid`.
+`mark-fixed`, `invalid`, and `ack` are shortcuts for `fixed`, `invalid`, and `valid`.
 Multiple IDs run in argument order and are not transactional: on failure,
 earlier successful changes remain. With `--json`, multiple results are NDJSON.
 These commands change server state; confirm the exact repository, finding IDs,
 and desired status with the user before invoking them.
+
+## Patches and pull requests
+
+Patch generation returns immediately by default. Add `--wait` only when the
+complete unified diff is needed now:
+
+```
+vega findings patch generate <finding-id> --scan <scan-id>
+vega findings patch generate <finding-id> --scan <scan-id> --wait
+vega findings patch generate <finding-id> --scan <scan-id> --wait -o fix.patch
+vega findings patch get <finding-id> --scan <scan-id> [--wait] [-o <file>]
+vega findings patch status <finding-id> --scan <scan-id>
+```
+
+`generate` reuses an available or running patch unless `--regenerate` is set.
+`get` never starts generation. `-o` on `generate` requires `--wait`; `-o -`
+means stdout. `--json` and file output are mutually exclusive. Waits default to
+60 minutes and accept explicit overrides such as `--timeout 30s` / `--timeout 10m`.
+Before waiting, the CLI reminds the user that Ctrl+C stops only the local wait and prints the exact
+scan-specific `patch get ... --wait` recovery command.
+
+Create a backend GitHub PR (one finding uses the single endpoint; several use
+one batch PR with one commit per finding):
+
+```
+vega findings pr create <finding-id>... --scan <scan-id> [--timeout 10m]
+vega findings pr status [<finding-id>] --scan <scan-id> [--wait]
+```
+
+PR creation waits for the PR job by default, but it never generates patches. Every selected
+finding must already have an available patch; otherwise the error prints the exact `patch generate`
+or `patch get --wait` command needed for each blocked finding. A custom `--commit-message` is valid
+only for one finding. The CLI does not touch local Git and does not mark findings fixed.
 
 ## Running a scan
 
@@ -173,6 +206,8 @@ vega scans cost-cap <scan_id> <usd>
 | 4 | not found (bad id or unknown name) | check the id |
 | 5 | scan ended failed/cancelled under `--wait`/`--follow` | inspect `failure_reason` in the printed detail |
 | 6 | cost consent refused or `--max-cost` exceeded | raise `--max-cost` or pass `--yes` |
+| 7 | patch/PR wait timed out; backend work continues | run the recovery command printed on stderr |
+| 130 | local wait interrupted with Ctrl+C; backend work continues | run the recovery command printed on stderr |
 
 Errors print as `error[<code>]: <message> (request_id=…)` on stderr —
 include the `request_id` when reporting backend issues.
