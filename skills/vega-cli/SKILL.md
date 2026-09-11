@@ -138,7 +138,8 @@ vega findings patch get <finding-id> --scan <scan-id> [--wait] [-o <file>]
 vega findings patch status <finding-id> --scan <scan-id>
 ```
 
-`generate` reuses an available or running patch unless `--regenerate` is set.
+`generate` reuses an available patch or running task unless `--regenerate` is set, and reports the
+reuse on stderr.
 `get` never starts generation. `-o` on `generate` requires `--wait`; `-o -`
 means stdout. `--json` and file output are mutually exclusive. Waits default to
 60 minutes and accept explicit overrides such as `--timeout 30s` / `--timeout 10m`.
