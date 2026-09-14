@@ -7,8 +7,8 @@
   },
   "plugins": [
     {
-      "name": "vega-cli",
-      "description": "Run Vega security scans and query findings from the command line.",
+      "name": "nebu-cli",
+      "description": "Run NebuSec Platform security scans and query findings from the command line.",
       "version": "1.0.8",
       "source": "./"
     }

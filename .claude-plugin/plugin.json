@@ -1,14 +1,14 @@
 {
-  "name": "vega-cli",
-  "displayName": "Vega CLI",
+  "name": "nebu-cli",
+  "displayName": "NebuSec Platform CLI",
   "version": "1.0.8",
-  "description": "Run Vega security scans and query findings from the command line.",
+  "description": "Run NebuSec Platform CLI security scans and query findings from the command line.",
   "author": {
     "name": "NebuSec",
     "email": "vega@nebusec.ai"
   },
-  "homepage": "https://github.com/NebuSec/vega-skill",
-  "repository": "https://github.com/NebuSec/vega-skill",
+  "homepage": "https://github.com/NebuSec/nebu-skill",
+  "repository": "https://github.com/NebuSec/nebu-skill",
   "keywords": [
     "security",
     "sast",

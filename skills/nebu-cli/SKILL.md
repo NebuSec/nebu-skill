@@ -1,15 +1,15 @@
 ---
-name: vega-cli
-description: Query Vega security-scan results and run security scans from
-  the command line. Use when asked to scan code with Vega, check scan
+name: nebu-cli
+description: Query NebuSec Platform security-scan results and run security scans from
+  the command line. Use when asked to scan code with NebuSec Platform, check scan
   progress or cost, or list/inspect security findings for a project,
   repository, or scan. Provides projects/repos/scans/findings subcommands
   with agent-friendly text output and raw-JSON mode.
 ---
 
-# Vega CLI
+# NebuSec Platform CLI
 
-`vega` audits code for security vulnerabilities on the Vega backend. Every
+`nebu` audits code for security vulnerabilities on the NebuSec Platform backend. Every
 subcommand is non-interactive and designed for programmatic use:
 
 - **stdout carries data only** — aligned columns for lists, markdown-style
@@ -17,40 +17,40 @@ subcommand is non-interactive and designed for programmatic use:
 - Add the global `--json` flag to any command to get the **raw backend
   JSON response** instead (compact, one object/array per line).
 - IDs are self-describing: projects `pg_…`, repositories `proj_…`, scans
-  `scan_…`; public findings use `VEGA-HIGH-00001`-style display IDs.
+  `scan_…`; public findings use `NEBU-HIGH-00001`-style display IDs.
   Finding display IDs are unique only within a repository. Wherever a `<project>` or `<repo>`
   argument is accepted, a unique name works too.
-- `vega <noun> --help` lists each subcommand; singular aliases work
-  (`vega scan run` = `vega scans run`).
+- `nebu <noun> --help` lists each subcommand; singular aliases work
+  (`nebu scan run` = `nebu scans run`).
 
 ## Install
 
-The `vega` binary must be on PATH. If `command -v vega` fails, install the
+The `nebu` binary must be on PATH. If `command -v nebu` fails, install the
 latest release (Linux/macOS, x64/arm64):
 
 ```
-curl -fsSL https://raw.githubusercontent.com/NebuSec/vega-skill/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NebuSec/nebu-skill/main/install.sh | sh
 ```
 
-Installs to `~/.local/bin` (override with `VEGA_INSTALL_DIR`; pin a version
-with `VEGA_VERSION=vX.Y.Z`). With Node.js available,
-`npm install -g @nebusec/vega` works too. Binaries are also
+Installs to `~/.local/bin` (override with `NEBU_INSTALL_DIR`; pin a version
+with `NEBU_VERSION=vX.Y.Z`). With Node.js available,
+`npm install -g @nebusec/nebu` works too. Binaries are also
 downloadable directly from
-<https://github.com/NebuSec/vega-skill/releases>.
+<https://github.com/NebuSec/nebu-skill/releases>.
 
 ## Setup
 
-Authentication, in precedence order: `VEGA_API_KEY` env var, else the
-credential stored by `vega auth login` (`--api-key vega_…` for headless,
-`--headless` for browser login over SSH). Backend URL: `VEGA_API_URL` env
+Authentication, in precedence order: `NEBU_API_KEY` env var, else the
+credential stored by `nebu auth login` (`--api-key nebu_…` for headless,
+`--headless` for browser login over SSH). Backend URL: `NEBU_API_URL` env
 or `--api-url` (defaults to production).
 
 Verify before doing anything else:
 
 ```
-vega auth status --json
+nebu auth status --json
 # {"signed_in":true,"source":"stored OAuth token","user_id":"…","email":"…",…}
-# exit 3 when not signed in → run `vega auth login` or set VEGA_API_KEY
+# exit 3 when not signed in → run `nebu auth login` or set NEBU_API_KEY
 ```
 
 ## Reading results (drill-down)
@@ -58,30 +58,30 @@ vega auth status --json
 The hierarchy is project → repository → scan → finding.
 
 ```
-vega projects list
+nebu projects list
 # PROJECT_ID           NAME         REPOS  OPEN  ACTIVE  LAST_SCAN
-# pg_HfPTMSdF1RTuWtk9  vega-collab  1      8     0       2026-06-29T23:36:00…
+# pg_HfPTMSdF1RTuWtk9  nebu-collab  1      8     0       2026-06-29T23:36:00…
 
-vega projects get <project>          # detail incl. finding_counts by severity
-vega projects repos <project>        # repositories in the project
-vega projects scans <project>        # scans across the project
+nebu projects get <project>          # detail incl. finding_counts by severity
+nebu projects repos <project>        # repositories in the project
+nebu projects scans <project>        # scans across the project
 
-vega repos list [--project <p>] [--git-remote github.com/org/repo]
-vega repos get <repo>                # state, snapshot_id, latest_scan_id, …
-vega repos scans <repo>
+nebu repos list [--project <p>] [--git-remote github.com/org/repo]
+nebu repos get <repo>                # state, snapshot_id, latest_scan_id, …
+nebu repos scans <repo>
 
-vega scans list [--project <p> | --repo <r>] [--limit N]
-vega scans get <scan_id> [--live]    # detail; --live adds live cost/progress
-vega scans get <scan_id> -s          # ONE line — cheapest way to poll:
+nebu scans list [--project <p> | --repo <r>] [--limit N]
+nebu scans get <scan_id> [--live]    # detail; --live adds live cost/progress
+nebu scans get <scan_id> -s          # ONE line — cheapest way to poll:
 # scan_NtWy… running 49% "Auditing auth module" findings=8 cost=$260.73
 ```
 
 ## Findings
 
 ```
-vega findings list --scan <scan_id>            # or --project <p> / --repo <r>
+nebu findings list --scan <scan_id>            # or --project <p> / --repo <r>
 # FINDING_ID      SCAN_ID    SEV     CONF  STATUS     FILE             TITLE
-# VEGA-MEDI-00001 scan_NtWy… medium  high  candidate  app/…/inline.py  Inline publish does…
+# NEBU-MEDI-00001 scan_NtWy… medium  high  candidate  app/…/inline.py  Inline publish does…
 # (stderr) total: 8  next_cursor: eyJz…
 ```
 
@@ -97,12 +97,12 @@ default (add `--include-dedup-pending` to see them, e.g. while a scan is
 running); findings confirmed as duplicates are never listed.
 
 ```
-vega findings get --scan <scan_id> <finding_id>      # summary/root cause/evidence/fix
-vega findings get --scan <scan_id> <id1> <id2>       # several from one scan;
+nebu findings get --scan <scan_id> <finding_id>      # summary/root cause/evidence/fix
+nebu findings get --scan <scan_id> <id1> <id2>       # several from one scan;
                                                       # --json emits NDJSON
-vega findings get --scan <scan_id> <finding_id> --full  # adds buggy code,
+nebu findings get --scan <scan_id> <finding_id> --full  # adds buggy code,
                                                          # attack path and long sections
-vega findings export --scan <scan_id> [--finding <id>]   # markdown report
+nebu findings export --scan <scan_id> [--finding <id>]   # markdown report
 ```
 
 Finding display IDs are repository-local, so `get` requires the scan that
@@ -112,11 +112,11 @@ a full human-readable report.
 Triage is repository-level and requires an explicit repository scope:
 
 ```
-vega findings mark --repo <repo> pending|valid|invalid|fixed <finding...>
-vega findings triage --repo <repo> <status> <finding...>  # mark alias
-vega findings mark-fixed --repo <repo> <finding...>
-vega findings invalid --repo <repo> <finding...>
-vega findings ack --repo <repo> <finding...>              # valid, still open
+nebu findings mark --repo <repo> pending|valid|invalid|fixed <finding...>
+nebu findings triage --repo <repo> <status> <finding...>  # mark alias
+nebu findings mark-fixed --repo <repo> <finding...>
+nebu findings invalid --repo <repo> <finding...>
+nebu findings ack --repo <repo> <finding...>              # valid, still open
 ```
 
 `mark-fixed`, `invalid`, and `ack` are shortcuts for `fixed`, `invalid`, and `valid`.
@@ -131,11 +131,11 @@ Patch generation returns immediately by default. Add `--wait` only when the
 complete unified diff is needed now:
 
 ```
-vega findings patch generate <finding-id> --scan <scan-id>
-vega findings patch generate <finding-id> --scan <scan-id> --wait
-vega findings patch generate <finding-id> --scan <scan-id> --wait -o fix.patch
-vega findings patch get <finding-id> --scan <scan-id> [--wait] [-o <file>]
-vega findings patch status <finding-id> --scan <scan-id>
+nebu findings patch generate <finding-id> --scan <scan-id>
+nebu findings patch generate <finding-id> --scan <scan-id> --wait
+nebu findings patch generate <finding-id> --scan <scan-id> --wait -o fix.patch
+nebu findings patch get <finding-id> --scan <scan-id> [--wait] [-o <file>]
+nebu findings patch status <finding-id> --scan <scan-id>
 ```
 
 `generate` reuses an available patch or running task unless `--regenerate` is set, and reports the
@@ -150,8 +150,8 @@ Create a backend GitHub PR (one finding uses the single endpoint; several use
 one batch PR with one commit per finding):
 
 ```
-vega findings pr create <finding-id>... --scan <scan-id> [--timeout 10m]
-vega findings pr status [<finding-id>] --scan <scan-id> [--wait]
+nebu findings pr create <finding-id>... --scan <scan-id> [--timeout 10m]
+nebu findings pr status [<finding-id>] --scan <scan-id> [--wait]
 ```
 
 PR creation waits for the PR job by default, but it never generates patches. Every selected
@@ -162,10 +162,10 @@ only for one finding. The CLI does not touch local Git and does not mark finding
 ## Running a scan
 
 ```
-vega scans run --path . --yes --max-cost 20 --cost-cap 30 --wait
+nebu scans run --path . --yes --max-cost 20 --cost-cap 30 --wait
 ```
 
-Steps performed: index + zip the directory (respects `.vegaignore`) →
+Steps performed: index + zip the directory (respects `.nebuignore`) →
 upload as a new repository (`--project <p>` attaches it; `--repo <r>`
 reuses an existing repository instead of uploading) → wait for snapshot →
 cost estimate → consent gate → create scan.
@@ -176,24 +176,24 @@ cost estimate → consent gate → create scan.
   otherwise counts as consent. This is the safest flag for agents.
 - `--yes`: unconditional consent. Without either, a non-TTY run exits 6.
 - `--cost-cap <usd>`: independent server-side spend cap (also settable
-  later via `vega scans cost-cap <scan_id> <usd>`).
-- `--estimate-only` (or `vega scans estimate`): print the estimate and
+  later via `nebu scans cost-cap <scan_id> <usd>`).
+- `--estimate-only` (or `nebu scans estimate`): print the estimate and
   stop — free, no scan created.
 
 **Watching progress:**
 - default: prints `scan created: scan_…` and returns immediately; poll
-  with `vega scans get <scan_id> -s`.
+  with `nebu scans get <scan_id> -s`.
 - `--wait`: poll until done; state changes on stderr, final scan detail
   on stdout.
 - `--follow`: stream backend events; with `--json` each event is one
   NDJSON line on stdout and the final scan detail is the last line.
-- `vega scans follow <scan_id>` attaches to an already-running scan.
+- `nebu scans follow <scan_id>` attaches to an already-running scan.
 
 ## Scan control
 
 ```
-vega scans pause|resume|cancel|retry <scan_id>    # prints "scan_… <new state>"
-vega scans cost-cap <scan_id> <usd>
+nebu scans pause|resume|cancel|retry <scan_id>    # prints "scan_… <new state>"
+nebu scans cost-cap <scan_id> <usd>
 ```
 
 ## Exit codes
@@ -203,7 +203,7 @@ vega scans cost-cap <scan_id> <usd>
 | 0 | success | — |
 | 1 | API/transport error (incl. 403 permission/billing denials — message says why) | read stderr |
 | 2 | usage error / ambiguous name | fix arguments, or use the id |
-| 3 | not authenticated (HTTP 401 / no credential) | `vega auth login` or set `VEGA_API_KEY` |
+| 3 | not authenticated (HTTP 401 / no credential) | `nebu auth login` or set `NEBU_API_KEY` |
 | 4 | not found (bad id or unknown name) | check the id |
 | 5 | scan ended failed/cancelled under `--wait`/`--follow` | inspect `failure_reason` in the printed detail |
 | 6 | cost consent refused or `--max-cost` exceeded | raise `--max-cost` or pass `--yes` |

@@ -1,16 +1,16 @@
 #!/bin/sh
-# Installs the vega CLI from GitHub Releases.
+# Installs the nebu CLI from GitHub Releases.
 #
-#   curl -fsSL https://raw.githubusercontent.com/NebuSec/vega-skill/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/NebuSec/nebu-skill/main/install.sh | sh
 #
 # Environment:
-#   VEGA_VERSION      release tag to install (default: latest)
-#   VEGA_INSTALL_DIR  target directory (default: ~/.local/bin)
+#   NEBU_VERSION      release tag to install (default: latest)
+#   NEBU_INSTALL_DIR  target directory (default: ~/.local/bin)
 set -eu
 
-REPO="NebuSec/vega-skill"
-INSTALL_DIR="${VEGA_INSTALL_DIR:-$HOME/.local/bin}"
-VERSION="${VEGA_VERSION:-latest}"
+REPO="NebuSec/nebu-skill"
+INSTALL_DIR="${NEBU_INSTALL_DIR:-$HOME/.local/bin}"
+VERSION="${NEBU_VERSION:-latest}"
 
 os=$(uname -s)
 arch=$(uname -m)
@@ -25,7 +25,7 @@ case "$arch" in
   *) echo "error: unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 
-asset="vega-$os-$arch.tar.gz"
+asset="nebu-$os-$arch.tar.gz"
 if [ "$VERSION" = "latest" ]; then
   url="https://github.com/$REPO/releases/latest/download/$asset"
 else
@@ -40,8 +40,8 @@ curl -fsSL "$url" -o "$tmp/$asset"
 tar -xzf "$tmp/$asset" -C "$tmp"
 
 mkdir -p "$INSTALL_DIR"
-install -m 755 "$tmp/vega" "$INSTALL_DIR/vega"
-echo "installed $("$INSTALL_DIR/vega" --version) to $INSTALL_DIR/vega" >&2
+install -m 755 "$tmp/nebu" "$INSTALL_DIR/nebu"
+echo "installed $("$INSTALL_DIR/nebu" --version) to $INSTALL_DIR/nebu" >&2
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
