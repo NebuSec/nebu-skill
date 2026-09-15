@@ -2,9 +2,10 @@
 name: nebu-cli
 description: Query NebuSec Platform security-scan results and run security scans from
   the command line. Use when asked to scan code with NebuSec Platform, check scan
-  progress or cost, or list/inspect security findings for a project,
-  repository, or scan. Provides projects/repos/scans/findings subcommands
-  with agent-friendly text output and raw-JSON mode.
+  progress or cost, list/inspect security findings for a project,
+  repository, or scan, or list/inspect cloud security findings raised on
+  connected cloud accounts. Provides projects/repos/scans/findings
+  subcommands with agent-friendly text output and raw-JSON mode.
 ---
 
 # NebuSec Platform CLI
@@ -17,7 +18,7 @@ subcommand is non-interactive and designed for programmatic use:
 - Add the global `--json` flag to any command to get the **raw backend
   JSON response** instead (compact, one object/array per line).
 - IDs are self-describing: projects `pg_…`, repositories `proj_…`, scans
-  `scan_…`; public findings use `NEBU-HIGH-00001`-style display IDs.
+  `scan_…`; public findings use `VEGA-HIGH-00001`-style display IDs.
   Finding display IDs are unique only within a repository. Wherever a `<project>` or `<repo>`
   argument is accepted, a unique name works too.
 - `nebu <noun> --help` lists each subcommand; singular aliases work
@@ -32,17 +33,17 @@ latest release (Linux/macOS, x64/arm64):
 curl -fsSL https://raw.githubusercontent.com/NebuSec/nebu-skill/main/install.sh | sh
 ```
 
-Installs to `~/.local/bin` (override with `NEBU_INSTALL_DIR`; pin a version
-with `NEBU_VERSION=vX.Y.Z`). With Node.js available,
+Installs to `~/.local/bin` (override with `NEBUSEC_PLATFORM_INSTALL_DIR`; pin a version
+with `NEBUSEC_PLATFORM_VERSION=vX.Y.Z`). With Node.js available,
 `npm install -g @nebusec/nebu` works too. Binaries are also
 downloadable directly from
 <https://github.com/NebuSec/nebu-skill/releases>.
 
 ## Setup
 
-Authentication, in precedence order: `NEBU_API_KEY` env var, else the
-credential stored by `nebu auth login` (`--api-key nebu_…` for headless,
-`--headless` for browser login over SSH). Backend URL: `NEBU_API_URL` env
+Authentication, in precedence order: `NEBUSEC_PLATFORM_API_KEY` env var, else the
+credential stored by `nebu auth login` (`--api-key vega_…` for headless,
+`--headless` for browser login over SSH). Backend URL: `NEBUSEC_PLATFORM_API_URL` env
 or `--api-url` (defaults to production).
 
 Verify before doing anything else:
@@ -50,7 +51,7 @@ Verify before doing anything else:
 ```
 nebu auth status --json
 # {"signed_in":true,"source":"stored OAuth token","user_id":"…","email":"…",…}
-# exit 3 when not signed in → run `nebu auth login` or set NEBU_API_KEY
+# exit 3 when not signed in → run `nebu auth login` or set NEBUSEC_PLATFORM_API_KEY
 ```
 
 ## Reading results (drill-down)
@@ -81,7 +82,7 @@ nebu scans get <scan_id> -s          # ONE line — cheapest way to poll:
 ```
 nebu findings list --scan <scan_id>            # or --project <p> / --repo <r>
 # FINDING_ID      SCAN_ID    SEV     CONF  STATUS     FILE             TITLE
-# NEBU-MEDI-00001 scan_NtWy… medium  high  candidate  app/…/inline.py  Inline publish does…
+# VEGA-MEDI-00001 scan_NtWy… medium  high  candidate  app/…/inline.py  Inline publish does…
 # (stderr) total: 8  next_cursor: eyJz…
 ```
 
@@ -124,6 +125,48 @@ Multiple IDs run in argument order and are not transactional: on failure,
 earlier successful changes remain. With `--json`, multiple results are NDJSON.
 These commands change server state; confirm the exact repository, finding IDs,
 and desired status with the user before invoking them.
+
+## Cloud findings
+
+`nebu findings cloud` reads findings that cloud-sec raised on a customer's
+connected cloud accounts. It is a **different resource** from code
+findings: no scan/repo, camelCase JSON, lifecycle + disposition instead of
+triage. Same conventions apply (columns, `--json`, `--limit`/`--all`, exit
+codes) and the same credentials: a browser sign-in, or
+`NEBUSEC_PLATFORM_API_KEY`. A scoped key needs `cloudsec:read` — both
+dashboard presets ("Read only", "Run scans and triage findings") include
+it; a key without it gets `403 insufficient_scope` (exit 1). The account
+must also be enabled for Cloud Security (`403 cloudsec_forbidden`
+otherwise).
+
+```
+nebu findings cloud list                                  # tenant with one cloud project
+nebu findings cloud list --project <cloud_project_id>     # every inventory of that project
+nebu findings cloud list --env <env_id>                   # one inventory (not with --project)
+nebu findings cloud list --severity critical,high --status open --status in_progress
+nebu findings cloud list --class exposure --flag new --source agent --sort newest --limit 20
+nebu findings cloud list --run <run_id>                   # only findings confirmed by that run
+nebu findings cloud list -q "public bucket" --resource "sec://…"   # search / asset filter
+nebu findings cloud list --all --json | jq '.findings[] | {findingId, severity, title}'
+nebu findings cloud get <finding_id> [<id2> …] [--env <env_id>] [--full]
+```
+
+Columns: `FINDING_ID SEVERITY RISK STATUS FLAG CLASS RESOURCE TITLE`.
+`STATUS` is `open|in_progress|resolved|disposed (<disposition>)`; `FLAG`
+is `new|changed|regressed` since the previous analysis; `RESOURCE` is the
+first affected asset with `sec://<tenant>/` stripped and `+N` for more.
+`--json` list output is the same `{findings, returned_count, total_count,
+truncated}` envelope as code findings; rows are the raw backend objects.
+`get` prints explanation, suggestion, remediation (markdown) and recheck
+history; `--full` adds the attack-path and report JSON. Analysis internals
+(rule id, last run id, verification plan, evidence refs, provenance) are
+never shown in text mode — customers receive them redacted anyway, and
+`--json` still returns whatever the backend sent.
+
+Scope flags take **ids only** and are mutually exclusive: `--project` or
+`--env`, never both (clap rejects the pair with exit 2). Omit both when the
+tenant has a single cloud project; exit 2 with a hint means several match
+and one must be named.
 
 ## Patches and pull requests
 
@@ -202,8 +245,8 @@ nebu scans cost-cap <scan_id> <usd>
 |---|---|---|
 | 0 | success | — |
 | 1 | API/transport error (incl. 403 permission/billing denials — message says why) | read stderr |
-| 2 | usage error / ambiguous name | fix arguments, or use the id |
-| 3 | not authenticated (HTTP 401 / no credential) | `nebu auth login` or set `NEBU_API_KEY` |
+| 2 | usage error / ambiguous name / ambiguous cloud scope | fix arguments, or use the id (`--project`/`--env`) |
+| 3 | not authenticated (HTTP 401 / no credential) | `nebu auth login` or set `NEBUSEC_PLATFORM_API_KEY` |
 | 4 | not found (bad id or unknown name) | check the id |
 | 5 | scan ended failed/cancelled under `--wait`/`--follow` | inspect `failure_reason` in the printed detail |
 | 6 | cost consent refused or `--max-cost` exceeded | raise `--max-cost` or pass `--yes` |
