@@ -1,7 +1,7 @@
 {
   "name": "nebu-cli",
   "displayName": "NebuSec Platform CLI",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "description": "Run NebuSec Platform CLI security scans and query findings from the command line.",
   "author": {
     "name": "NebuSec",

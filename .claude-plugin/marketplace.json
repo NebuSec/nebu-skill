@@ -9,7 +9,7 @@
     {
       "name": "nebu-cli",
       "description": "Run NebuSec Platform security scans and query findings from the command line.",
-      "version": "1.0.10",
+      "version": "1.0.12",
       "source": "./"
     }
   ]
