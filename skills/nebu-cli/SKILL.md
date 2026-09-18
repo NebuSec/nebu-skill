@@ -10,8 +10,10 @@ description: Query NebuSec Platform security-scan results and run security scans
 
 # NebuSec Platform CLI
 
-`nebu` audits code for security vulnerabilities on the NebuSec Platform backend. Every
-subcommand is non-interactive and designed for programmatic use:
+`nebu` audits code for security vulnerabilities on the NebuSec Platform backend. The
+projects/repos/scans/findings/auth/completion commands are non-interactive and designed for
+programmatic use. `nebu chat` is the intentional exception: it is a human-facing full-screen TUI
+and must not be launched by an agent or in a pipeline.
 
 - **stdout carries data only** — aligned columns for lists, markdown-style
   sections for details. Progress, warnings, and errors go to **stderr**.
