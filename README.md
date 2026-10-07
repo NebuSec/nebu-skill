@@ -41,6 +41,9 @@ Or via npm (requires Node.js ≥ 18):
 npm install -g @nebusec/nebu
 ```
 
+Both installation methods install only `nebu`; they do not create or replace a
+`vega` command.
+
 Release assets, if you prefer manual download:
 
 | asset | platform |
