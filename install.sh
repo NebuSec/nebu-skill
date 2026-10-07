@@ -101,18 +101,49 @@ fi
 
 asset="nebu-$platform-$arch.tar.gz"
 if [ "$VERSION" = latest ]; then
-  download_url="https://github.com/$REPO/releases/latest/download/$asset"
+  # Resolve the tag once, so the archive and its checksums come from the same
+  # release even if a new one is published between the two downloads.
+  latest_url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")
+  tag=${latest_url##*/}
+  case "$tag" in
+    v*) ;;
+    *)
+      printf 'error: could not resolve the latest release (got %s)\n' "$latest_url" >&2
+      exit 1
+      ;;
+  esac
 else
   case "$VERSION" in
     v*) tag=$VERSION ;;
     *) tag="v$VERSION" ;;
   esac
-  download_url="https://github.com/$REPO/releases/download/$tag/$asset"
 fi
+release_url="https://github.com/$REPO/releases/download/$tag"
+
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  else
+    printf 'error: neither sha256sum nor shasum is available to verify the download\n' >&2
+    exit 1
+  fi
+}
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-curl -fsSL "$download_url" -o "$tmp/$asset"
+curl -fsSL "$release_url/$asset" -o "$tmp/$asset"
+if ! curl -fsSL "$release_url/SHA256SUMS" -o "$tmp/SHA256SUMS"; then
+  printf 'error: could not download SHA256SUMS of %s; this script installs only releases that publish it\n' "$tag" >&2
+  exit 1
+fi
+expected=$(awk -v asset="$asset" '$2 == asset { print $1 }' "$tmp/SHA256SUMS")
+actual=$(sha256 "$tmp/$asset")
+if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+  printf 'error: %s does not match the checksum published with %s; nothing was installed\n' "$asset" "$tag" >&2
+  exit 1
+fi
 tar -xzf "$tmp/$asset" -C "$tmp"
 install -m 755 "$tmp/nebu" "$nebu_path"
 printf 'Installed nebu to %s\n' "$nebu_path"
