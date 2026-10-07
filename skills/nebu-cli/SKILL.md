@@ -125,8 +125,28 @@ nebu findings ack --repo <repo> <finding...>              # valid, still open
 `mark-fixed`, `invalid`, and `ack` are shortcuts for `fixed`, `invalid`, and `valid`.
 Multiple IDs run in argument order and are not transactional: on failure,
 earlier successful changes remain. With `--json`, multiple results are NDJSON.
-These commands change server state; confirm the exact repository, finding IDs,
-and desired status with the user before invoking them.
+These commands change server state. Resolve the exact repository and finding IDs
+before invoking them; if only a scan is known, use `findings get` and read its
+`repository_id`. Never guess the repository for a repository-local display ID.
+
+When an agent handles a code finding, keep its server triage synchronized with
+the outcome:
+
+- If the user explicitly says the finding is incorrect, a false positive, or
+  unnecessary, run `findings invalid` immediately without asking for another
+  confirmation. The agent's own suspicion is not enough to mark it invalid.
+- After applying a local fix or a Nebu-generated patch, or after obtaining
+  evidence that a remediation PR was merged, run relevant verification and
+  present the result to the user. Only after the user explicitly accepts the
+  verified fix, run `findings mark-fixed` immediately without another
+  confirmation.
+- A generated, downloaded, or available patch is not itself a fix, and neither
+  is a merely created PR. Do not mark fixed after failed or unavailable
+  verification, a patch failure or timeout, or before user acceptance.
+
+For other triage changes, confirm the desired status with the user. Report any
+mutation failure or partial batch result; never claim an unchanged finding was
+updated.
 
 ## Cloud findings
 
@@ -202,7 +222,9 @@ nebu findings pr status [<finding-id>] --scan <scan-id> [--wait]
 PR creation waits for the PR job by default, but it never generates patches. Every selected
 finding must already have an available patch; otherwise the error prints the exact `patch generate`
 or `patch get --wait` command needed for each blocked finding. A custom `--commit-message` is valid
-only for one finding. The CLI does not touch local Git and does not mark findings fixed.
+only for one finding. The CLI does not touch local Git or mark findings fixed on its own; agents
+follow the triage synchronization rules above after application or merge, verification, and user
+acceptance.
 
 ## Running a scan
 
