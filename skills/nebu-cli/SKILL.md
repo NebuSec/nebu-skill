@@ -35,11 +35,17 @@ latest release (Linux/macOS, x64/arm64):
 curl -fsSL https://raw.githubusercontent.com/NebuSec/nebu-skill/main/install.sh | sh
 ```
 
-Installs to `~/.local/bin` (override with `NEBUSEC_PLATFORM_INSTALL_DIR`; pin a version
-with `NEBUSEC_PLATFORM_VERSION=vX.Y.Z`). With Node.js available,
+Installs to `~/.local/bin` (override with `NEBU_INSTALL_DIR`; pin a version
+whose release assets include `SHA256SUMS` with `NEBU_VERSION=vX.Y.Z`). With Node.js available,
 `npm install -g @nebusec/nebu` works too. Binaries are also
 downloadable directly from
 <https://github.com/NebuSec/nebu-skill/releases>.
+
+A command that fails with `error[cli_upgrade_required]` is running a release
+the platform no longer serves; retrying will not help. Update with the command
+the error names, then retry. `nebu upgrade` updates to the latest release
+(through npm, pnpm, yarn, bun or Volta when one of them installed it
+globally) on releases that have that command.
 
 ## Setup
 
@@ -48,12 +54,23 @@ credential stored by `nebu auth login` (`--api-key vega_…` for headless,
 `--headless` for browser login over SSH). Backend URL: `NEBUSEC_PLATFORM_API_URL` env
 or `--api-url` (defaults to production).
 
+`NEBU_HOME` is a complete, isolated CLI home (sign-in, settings, profiles,
+everything), like `CODEX_HOME`; nothing is inherited from the default home.
+Unset means the user's default. To use a different account in one session or
+sub-agent without touching the others, create a directory for it and export
+it as `NEBU_HOME` before `nebu auth login` (`~/` is expanded; the directory
+must already exist), and keep it exported for every later command in that
+session. `nebu auth status --json` reports the `home` in use.
+
 Verify before doing anything else:
 
 ```
 nebu auth status --json
-# {"signed_in":true,"source":"stored OAuth token","user_id":"…","email":"…",…}
-# exit 3 when not signed in → run `nebu auth login` or set NEBUSEC_PLATFORM_API_KEY
+# {"signed_in":true,"source":"stored browser session","user":"…","email":"…",…}
+# not signed in: {"signed_in":false,"error":{"code":"…","reason":"…","message":"…"}}
+#   exit 3 → signing in again is the fix; `message` says why (for example a
+#   password change) and what to run. Exit 1 → it is not (network, an
+#   unwritable config directory); do not loop on `nebu auth login`.
 ```
 
 ## Reading results (drill-down)
@@ -250,7 +267,7 @@ nebu scans cost-cap <scan_id> <usd>
 | 0 | success | — |
 | 1 | API/transport error (incl. 403 permission/billing denials — message says why) | read stderr |
 | 2 | usage error / ambiguous name / ambiguous cloud scope | fix arguments, or use the id (`--project`/`--env`) |
-| 3 | not authenticated (HTTP 401 / no credential) | `nebu auth login` or set `NEBUSEC_PLATFORM_API_KEY` |
+| 3 | not authenticated: no credential, or the sign-in ended (`error[session_ended]` says why) | do what the message says: usually `nebu auth login`, or set `NEBUSEC_PLATFORM_API_KEY` |
 | 4 | not found (bad id or unknown name) | check the id |
 | 5 | scan ended failed/cancelled under `--wait`/`--follow` | inspect `failure_reason` in the printed detail |
 | 6 | cost consent refused or `--max-cost` exceeded | raise `--max-cost` or pass `--yes` |
