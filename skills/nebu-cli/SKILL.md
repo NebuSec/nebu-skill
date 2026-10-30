@@ -66,12 +66,20 @@ Verify before doing anything else:
 
 ```
 nebu auth status --json
-# {"signed_in":true,"source":"stored browser session","user":"…","email":"…",…}
+# {"signed_in":true,"source":"stored browser session","user":"…","email":"…",
+#  "sign_in":{"kind":"browser","ends_at":"…Z","api_url":"…",…},…}
 # not signed in: {"signed_in":false,"error":{"code":"…","reason":"…","message":"…"}}
 #   exit 3 → signing in again is the fix; `message` says why (for example a
 #   password change) and what to run. Exit 1 → it is not (network, an
-#   unwritable config directory); do not loop on `nebu auth login`.
+#   unwritable config directory, `wrong_platform`: the sign-in is for another
+#   --api-url); do not loop on `nebu auth login`.
 ```
+
+This is the check, and it never signs in or out; do not judge a sign-in from
+`credentials.json`. Its ID token lasts about an hour and renews on the next
+command, so a past `expires_at` or token `exp` there does not mean the sign-in
+ended. `sign_in.ends_at` is the latest it lasts, `sign_in.ends_if_unused_at`
+when it ends if nothing uses it first; the server can end it sooner.
 
 ## Reading results (drill-down)
 
@@ -129,21 +137,65 @@ Finding display IDs are repository-local, so `get` requires the scan that
 contains them. Fetch `get` only for findings you will act on; use `export` for
 a full human-readable report.
 
+Change a finding's severity. `--note` is optional but strongly recommended;
+include the reason for the latest change whenever available:
+
+```
+nebu findings severity --scan <scan_id> <critical|high|medium|low|info> <finding_id> [--note "Reason"]
+```
+
+The backend trims the note and accepts up to 500 characters. Omitting `--note`
+or passing a blank note clears the previous severity note. This changes server
+state; confirm the intended severity with the user before invoking it.
+
 Triage is repository-level and requires an explicit repository scope:
 
 ```
 nebu findings mark --repo <repo> pending|valid|invalid|fixed <finding...>
 nebu findings triage --repo <repo> <status> <finding...>  # mark alias
 nebu findings mark-fixed --repo <repo> <finding...>
-nebu findings invalid --repo <repo> <finding...>
+nebu findings invalid --repo <repo> <finding...> [--note "Reason"]
 nebu findings ack --repo <repo> <finding...>              # valid, still open
 ```
 
 `mark-fixed`, `invalid`, and `ack` are shortcuts for `fixed`, `invalid`, and `valid`.
+When marking invalid, `--note` is optional but strongly recommended: include
+the user's reason whenever available. It writes `invalid_note_raw`, not
+`severity_note`. `mark` and `triage` also accept `--note` for `invalid` only.
+The backend trims the reason and accepts up to 500 characters; omitting it
+or passing whitespace leaves an existing invalidation reason unchanged.
+With multiple IDs, the same note applies to every finding, so split the
+commands when their reasons differ.
+When `severity` or `invalid` runs without a note, stderr ends with a `Next:`
+line asking for a reason and showing the same command with `--note "Reason"`.
+If the user gave a reason, rerun that command with it; the backend accepts the
+same severity or an already-invalid finding and stores the note. Otherwise ask
+the user once for the reason. Never invent one.
 Multiple IDs run in argument order and are not transactional: on failure,
 earlier successful changes remain. With `--json`, multiple results are NDJSON.
-These commands change server state; confirm the exact repository, finding IDs,
-and desired status with the user before invoking them.
+These commands change server state. Resolve the exact repository and finding IDs
+before invoking them; if only a scan is known, use `findings get` and read its
+`repository_id`. Never guess the repository for a repository-local display ID.
+
+When an agent handles a code finding, keep its server triage synchronized with
+the outcome:
+
+- If the user explicitly says the finding is incorrect, a false positive, or
+  unnecessary, run `findings invalid` immediately without asking for another
+  confirmation, strongly preferring `--note` with the user's stated reason.
+  The agent's own suspicion is not enough to mark it invalid.
+- After applying a local fix or a Nebu-generated patch, or after obtaining
+  evidence that a remediation PR was merged, run relevant verification and
+  present the result to the user. Only after the user explicitly accepts the
+  verified fix, run `findings mark-fixed` immediately without another
+  confirmation.
+- A generated, downloaded, or available patch is not itself a fix, and neither
+  is a merely created PR. Do not mark fixed after failed or unavailable
+  verification, a patch failure or timeout, or before user acceptance.
+
+For other triage changes, confirm the desired status with the user. Report any
+mutation failure or partial batch result; never claim an unchanged finding was
+updated.
 
 ## Cloud findings
 
@@ -219,7 +271,9 @@ nebu findings pr status [<finding-id>] --scan <scan-id> [--wait]
 PR creation waits for the PR job by default, but it never generates patches. Every selected
 finding must already have an available patch; otherwise the error prints the exact `patch generate`
 or `patch get --wait` command needed for each blocked finding. A custom `--commit-message` is valid
-only for one finding. The CLI does not touch local Git and does not mark findings fixed.
+only for one finding. The CLI does not touch local Git or mark findings fixed on its own; agents
+follow the triage synchronization rules above after application or merge, verification, and user
+acceptance.
 
 ## Running a scan
 
@@ -265,7 +319,7 @@ nebu scans cost-cap <scan_id> <usd>
 | code | meaning | typical reaction |
 |---|---|---|
 | 0 | success | — |
-| 1 | API/transport error (incl. 403 permission/billing denials — message says why) | read stderr |
+| 1 | API/transport error (incl. permission denials and billing refusals — message says why) | read stderr; for a billing refusal, tell the user the `Next:` line (add funds, upgrade, …) |
 | 2 | usage error / ambiguous name / ambiguous cloud scope | fix arguments, or use the id (`--project`/`--env`) |
 | 3 | not authenticated: no credential, or the sign-in ended (`error[session_ended]` says why) | do what the message says: usually `nebu auth login`, or set `NEBUSEC_PLATFORM_API_KEY` |
 | 4 | not found (bad id or unknown name) | check the id |
