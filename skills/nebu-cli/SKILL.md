@@ -1,332 +1,82 @@
 ---
 name: nebu-cli
-description: Query NebuSec Platform security-scan results and run security scans from
-  the command line. Use when asked to scan code with NebuSec Platform, check scan
-  progress or cost, list/inspect security findings for a project,
-  repository, or scan, or list/inspect cloud security findings raised on
-  connected cloud accounts. Provides projects/repos/scans/findings
-  subcommands with agent-friendly text output and raw-JSON mode.
+description: Use the NebuSec Platform from the command line in place of its web app.
+  Use when asked to add a repository to NebuSec Platform, estimate or run a security
+  scan (full, project, pull request or diff), follow a scan, list, pick and mark code
+  or cloud findings, generate patches and fix pull requests, or set up pull request
+  triggers. Agent-friendly text output and a JSON mode.
 ---
 
 # NebuSec Platform CLI
 
-`nebu` audits code for security vulnerabilities on the NebuSec Platform backend. The
-projects/repos/scans/findings/auth/completion commands are non-interactive and designed for
-programmatic use. `nebu chat` is the intentional exception: it is a human-facing full-screen TUI
-and must not be launched by an agent or in a pipeline.
+`nebu` does most of the NebuSec Platform web app's work on the command line.
+This file holds the rules for every task; each task's commands are in the file the table below names, read when the task comes up.
+A command's other options are in its `--help` (`nebu scans run --help`): read that rather than guess a flag.
 
-- **stdout carries data only** — aligned columns for lists, markdown-style
-  sections for details. Progress, warnings, and errors go to **stderr**.
-- Add the global `--json` flag to any command to get the **raw backend
-  JSON response** instead (compact, one object/array per line).
-- IDs are self-describing: projects `pg_…`, repositories `proj_…`, scans
-  `scan_…`; public findings use `VEGA-HIGH-00001`-style display IDs.
-  Finding display IDs are unique only within a repository. Wherever a `<project>` or `<repo>`
-  argument is accepted, a unique name works too.
-- `nebu <noun> --help` lists each subcommand; singular aliases work
-  (`nebu scan run` = `nebu scans run`).
+## Before anything
 
-## Install
+- Run `nebu --version`: if it prints 1.0.15 or older, run `nebu upgrade` (or install it, [setup.md](references/setup.md)) first.
+  This guide's commands arrive with the release after 1.0.15; an older `nebu` takes some of them with another meaning (another default depth, no `depth:` line) or asks for other arguments.
+  Later, a command or flag refused as unrecognized or unexpected (exit 2) is the same sign.
+- Run `nebu auth status --json`; when `nebu` is missing or not signed in, follow [setup.md](references/setup.md).
+- Data goes to stdout; progress, prices and errors to stderr.
+  The global `--json` gives JSON instead (`findings export` always prints Markdown).
+- Ids: projects `pg_…`, repositories `proj_…`, scans `scan_…`; a unique name works for a `<project>` or `<repo>`.
+- `nebu chat` is a full-screen program for people; never start it from an agent or a pipeline.
+- Read only what the task needs: find one repository with `nebu repos list --git-remote <remote>` (its clone URL or host and path) or `nebu projects repos <project>` rather than listing every repository, filter finding lists (`--severity`, `--limit`), and poll a scan with `scans get -s`.
+  Take the text output unless you must parse a field; `--json` prints far more.
 
-The `nebu` binary must be on PATH. If `command -v nebu` fails, install the
-latest release (Linux/macOS, x64/arm64):
+## Tasks
 
-```
-curl -fsSL https://raw.githubusercontent.com/NebuSec/nebu-skill/main/install.sh | sh
-```
+| Task | Read |
+|---|---|
+| Install, sign in, permission levels, API keys | [setup.md](references/setup.md) |
+| Add a repository (GitHub, GitLab, Git URL, local upload) | [repositories.md](references/repositories.md) |
+| Estimate, run, follow and control a scan (full, project, pull request, diff) | [scans.md](references/scans.md) |
+| Read, pick and mark code findings | [findings.md](references/findings.md) |
+| Generate patches and open fix pull requests | [patches.md](references/patches.md) |
+| Pull request triggers | [triggers.md](references/triggers.md) |
+| Cloud findings | [cloud-findings.md](references/cloud-findings.md) |
 
-Installs to `~/.local/bin` (override with `NEBU_INSTALL_DIR`; pin a version
-whose release assets include `SHA256SUMS` with `NEBU_VERSION=vX.Y.Z`). With Node.js available,
-`npm install -g @nebusec/nebu` works too. Binaries are also
-downloadable directly from
-<https://github.com/NebuSec/nebu-skill/releases>.
+## Rules for every task
 
-A command that fails with `error[cli_upgrade_required]` is running a release
-the platform no longer serves; retrying will not help. Update with the command
-the error names, then retry. `nebu upgrade` updates to the latest release
-(through npm, pnpm, yarn, bun or Volta when one of them installed it
-globally) on releases that have that command.
+- **Money.** A scan you launch is charged exactly the fixed price it was quoted, never more.
+  A request to scan is not approval of its price: launch with `--max-cost <approved_usd>`, the amount the user approved, not `--yes`, which accepts any new quote.
+  Without `--max-cost`, `scans run` outside a terminal prints the quote and stops (exit 6, nothing launched): tell the user the depth and price.
+  The launch quotes again and stops (exit 6) above `--max-cost`; a budget the user gave first ("up to 5 USD") is an approval: a quote within it launches.
+  Only a quote not in USD, which `--max-cost` refuses (exit 6), takes `--yes`, once the user approved it.
+- **Never run `scans run` again to look at a scan**: each one is a new scan and a new charge; follow it as [scans.md](references/scans.md) says.
+- **Uploads.** `repos add --path`, and `scans estimate` or `scans run` without `--repo`, upload the directory as a new repository each time.
+  Upload only when the user asked to scan or add local code, after telling them; for a repository already on the platform, always pass `--repo`.
+- **Triggers** start paid scans with no price shown first: create or enable one only when the user asked for a trigger, after telling them that and what it will run, its depth and which pull requests ([triggers.md](references/triggers.md)).
+- **`Next:` lines** are the CLI's suggestion for the task at hand: relay them.
+  Act on one only when it is a read, or a write or paid work the user asked for or approved (a pull request, a patch, a scan, a retry, a deletion, a status change).
+- **Finding status** follows what happened:
+  - When the user says a finding is wrong, a false positive or not needed, mark it invalid at once with the user's reason as `--note`; your own suspicion is not enough.
+  - Mark it fixed only after a fix (local, a generated patch, or a merged fix pull request) was verified and the user accepted it; a patch or an opened pull request is not a fix.
+  - When the user asks for a change without giving a reason, make it without `--note` and `--reason`, or ask them once for one (also when a `Next:` line asks for a reason); never write a note or pick a reason the user did not give, even where a command recommends one.
+  - Make any other status or severity change only when the user asked for it or confirmed it; a request that names the change is the confirmation.
+- **Secrets.** Never ask for, accept, print, store or pass on a command line or in a file an API key, a password, a token or a cloud access key: when a task needs a key, tell the user to set it in the environment where `nebu` runs ([setup.md](references/setup.md)), and if one is pasted into the conversation, do not use it and tell the user to revoke it in the web app.
+- **Deleting, cancelling, pausing, retrying** only when the user asks; a deletion needs `--yes` outside a terminal.
+- **Exit 8**: the user must first finish a step in the web app; give them the `Next:` line, which names the page, and stop.
 
-## Setup
+## When something refuses
 
-Authentication, in precedence order: `NEBUSEC_PLATFORM_API_KEY` env var, else the
-credential stored by `nebu auth login` (`--api-key vega_…` for headless,
-`--headless` for browser login over SSH). Backend URL: `NEBUSEC_PLATFORM_API_URL` env
-or `--api-url` (defaults to production).
+Errors print on stderr as `error[<code>]: <message> (request_id=…)` or `error: <message>`, often followed by a `Next:` line.
+Quote the error's `request_id`, if it shows one, when reporting a problem.
 
-`NEBU_HOME` is a complete, isolated CLI home (sign-in, settings, profiles,
-everything), like `CODEX_HOME`; nothing is inherited from the default home.
-Unset means the user's default. To use a different account in one session or
-sub-agent without touching the others, create a directory for it and export
-it as `NEBU_HOME` before `nebu auth login` (`~/` is expanded; the directory
-must already exist), and keep it exported for every later command in that
-session. `nebu auth status --json` reports the `home` in use.
-
-Verify before doing anything else:
-
-```
-nebu auth status --json
-# {"signed_in":true,"source":"stored browser session","user":"…","email":"…",
-#  "sign_in":{"kind":"browser","ends_at":"…Z","api_url":"…",…},…}
-# not signed in: {"signed_in":false,"error":{"code":"…","reason":"…","message":"…"}}
-#   exit 3 → signing in again is the fix; `message` says why (for example a
-#   password change) and what to run. Exit 1 → it is not (network, an
-#   unwritable config directory, `wrong_platform`: the sign-in is for another
-#   --api-url); do not loop on `nebu auth login`.
-```
-
-This is the check, and it never signs in or out; do not judge a sign-in from
-`credentials.json`. Its ID token lasts about an hour and renews on the next
-command, so a past `expires_at` or token `exp` there does not mean the sign-in
-ended. `sign_in.ends_at` is the latest it lasts, `sign_in.ends_if_unused_at`
-when it ends if nothing uses it first; the server can end it sooner.
-
-## Reading results (drill-down)
-
-The hierarchy is project → repository → scan → finding.
-
-```
-nebu projects list
-# PROJECT_ID           NAME         REPOS  OPEN  ACTIVE  LAST_SCAN
-# pg_HfPTMSdF1RTuWtk9  nebu-collab  1      8     0       2026-06-29T23:36:00…
-
-nebu projects get <project>          # detail incl. finding_counts by severity
-nebu projects repos <project>        # repositories in the project
-nebu projects scans <project>        # scans across the project
-
-nebu repos list [--project <p>] [--git-remote github.com/org/repo]
-nebu repos get <repo>                # state, snapshot_id, latest_scan_id, …
-nebu repos scans <repo>
-
-nebu scans list [--project <p> | --repo <r>] [--limit N]
-nebu scans get <scan_id> [--live]    # detail; --live adds live cost/progress
-nebu scans get <scan_id> -s          # ONE line — cheapest way to poll:
-# scan_NtWy… running 49% "Auditing auth module" findings=8 cost=$260.73
-```
-
-## Findings
-
-```
-nebu findings list --scan <scan_id>            # or --project <p> / --repo <r>
-# FINDING_ID      SCAN_ID    SEV     CONF  STATUS     FILE             TITLE
-# VEGA-MEDI-00001 scan_NtWy… medium  high  candidate  app/…/inline.py  Inline publish does…
-# (stderr) total: 8  next_cursor: eyJz…
-```
-
-Filters keep output (and your token use) small — prefer them over
-fetching everything: `--severity critical,high`, `--status confirmed`,
-`--file-prefix src/api/`, `--cwe CWE-89`, `-q "sql injection"`,
-`--limit N`. Page with `--cursor <next_cursor>` (cursor is on stderr in
-text mode, `next_cursor` in the JSON body), or pass `--all` to fetch every
-page.
-
-Visibility: findings still waiting in the dedup queue are hidden by
-default (add `--include-dedup-pending` to see them, e.g. while a scan is
-running); findings confirmed as duplicates are never listed.
-
-```
-nebu findings get --scan <scan_id> <finding_id>      # summary/root cause/evidence/fix
-nebu findings get --scan <scan_id> <id1> <id2>       # several from one scan;
-                                                      # --json emits NDJSON
-nebu findings get --scan <scan_id> <finding_id> --full  # adds buggy code,
-                                                         # attack path and long sections
-nebu findings export --scan <scan_id> [--finding <id>]   # markdown report
-```
-
-Finding display IDs are repository-local, so `get` requires the scan that
-contains them. Fetch `get` only for findings you will act on; use `export` for
-a full human-readable report.
-
-Change a finding's severity. `--note` is optional but strongly recommended;
-include the reason for the latest change whenever available:
-
-```
-nebu findings severity --scan <scan_id> <critical|high|medium|low|info> <finding_id> [--note "Reason"]
-```
-
-The backend trims the note and accepts up to 500 characters. Omitting `--note`
-or passing a blank note clears the previous severity note. This changes server
-state; confirm the intended severity with the user before invoking it.
-
-Triage is repository-level and requires an explicit repository scope:
-
-```
-nebu findings mark --repo <repo> pending|valid|invalid|fixed <finding...>
-nebu findings triage --repo <repo> <status> <finding...>  # mark alias
-nebu findings mark-fixed --repo <repo> <finding...>
-nebu findings invalid --repo <repo> <finding...> [--note "Reason"]
-nebu findings ack --repo <repo> <finding...>              # valid, still open
-```
-
-`mark-fixed`, `invalid`, and `ack` are shortcuts for `fixed`, `invalid`, and `valid`.
-When marking invalid, `--note` is optional but strongly recommended: include
-the user's reason whenever available. It writes `invalid_note_raw`, not
-`severity_note`. `mark` and `triage` also accept `--note` for `invalid` only.
-The backend trims the reason and accepts up to 500 characters; omitting it
-or passing whitespace leaves an existing invalidation reason unchanged.
-With multiple IDs, the same note applies to every finding, so split the
-commands when their reasons differ.
-When `severity` or `invalid` runs without a note, stderr ends with a `Next:`
-line asking for a reason and showing the same command with `--note "Reason"`.
-If the user gave a reason, rerun that command with it; the backend accepts the
-same severity or an already-invalid finding and stores the note. Otherwise ask
-the user once for the reason. Never invent one.
-Multiple IDs run in argument order and are not transactional: on failure,
-earlier successful changes remain. With `--json`, multiple results are NDJSON.
-These commands change server state. Resolve the exact repository and finding IDs
-before invoking them; if only a scan is known, use `findings get` and read its
-`repository_id`. Never guess the repository for a repository-local display ID.
-
-When an agent handles a code finding, keep its server triage synchronized with
-the outcome:
-
-- If the user explicitly says the finding is incorrect, a false positive, or
-  unnecessary, run `findings invalid` immediately without asking for another
-  confirmation, strongly preferring `--note` with the user's stated reason.
-  The agent's own suspicion is not enough to mark it invalid.
-- After applying a local fix or a Nebu-generated patch, or after obtaining
-  evidence that a remediation PR was merged, run relevant verification and
-  present the result to the user. Only after the user explicitly accepts the
-  verified fix, run `findings mark-fixed` immediately without another
-  confirmation.
-- A generated, downloaded, or available patch is not itself a fix, and neither
-  is a merely created PR. Do not mark fixed after failed or unavailable
-  verification, a patch failure or timeout, or before user acceptance.
-
-For other triage changes, confirm the desired status with the user. Report any
-mutation failure or partial batch result; never claim an unchanged finding was
-updated.
-
-## Cloud findings
-
-`nebu findings cloud` reads findings that cloud-sec raised on a customer's
-connected cloud accounts. It is a **different resource** from code
-findings: no scan/repo, camelCase JSON, lifecycle + disposition instead of
-triage. Same conventions apply (columns, `--json`, `--limit`/`--all`, exit
-codes) and the same credentials: a browser sign-in, or
-`NEBUSEC_PLATFORM_API_KEY`. A scoped key needs `cloudsec:read` — both
-dashboard presets ("Read only", "Run scans and triage findings") include
-it; a key without it gets `403 insufficient_scope` (exit 1). The account
-must also be enabled for Cloud Security (`403 cloudsec_forbidden`
-otherwise).
-
-```
-nebu findings cloud list                                  # tenant with one cloud project
-nebu findings cloud list --project <cloud_project_id>     # every inventory of that project
-nebu findings cloud list --env <env_id>                   # one inventory (not with --project)
-nebu findings cloud list --severity critical,high --status open --status in_progress
-nebu findings cloud list --class exposure --flag new --source agent --sort newest --limit 20
-nebu findings cloud list --run <run_id>                   # only findings confirmed by that run
-nebu findings cloud list -q "public bucket" --resource "sec://…"   # search / asset filter
-nebu findings cloud list --all --json | jq '.findings[] | {findingId, severity, title}'
-nebu findings cloud get <finding_id> [<id2> …] [--env <env_id>] [--full]
-```
-
-Columns: `FINDING_ID SEVERITY RISK STATUS FLAG CLASS RESOURCE TITLE`.
-`STATUS` is `open|in_progress|resolved|disposed (<disposition>)`; `FLAG`
-is `new|changed|regressed` since the previous analysis; `RESOURCE` is the
-first affected asset with `sec://<tenant>/` stripped and `+N` for more.
-`--json` list output is the same `{findings, returned_count, total_count,
-truncated}` envelope as code findings; rows are the raw backend objects.
-`get` prints explanation, suggestion, remediation (markdown) and recheck
-history; `--full` adds the attack-path and report JSON. Analysis internals
-(rule id, last run id, verification plan, evidence refs, provenance) are
-never shown in text mode — customers receive them redacted anyway, and
-`--json` still returns whatever the backend sent.
-
-Scope flags take **ids only** and are mutually exclusive: `--project` or
-`--env`, never both (clap rejects the pair with exit 2). Omit both when the
-tenant has a single cloud project; exit 2 with a hint means several match
-and one must be named.
-
-## Patches and pull requests
-
-Patch generation returns immediately by default. Add `--wait` only when the
-complete unified diff is needed now:
-
-```
-nebu findings patch generate <finding-id> --scan <scan-id>
-nebu findings patch generate <finding-id> --scan <scan-id> --wait
-nebu findings patch generate <finding-id> --scan <scan-id> --wait -o fix.patch
-nebu findings patch get <finding-id> --scan <scan-id> [--wait] [-o <file>]
-nebu findings patch status <finding-id> --scan <scan-id>
-```
-
-`generate` reuses an available patch or running task unless `--regenerate` is set, and reports the
-reuse on stderr.
-`get` never starts generation. `-o` on `generate` requires `--wait`; `-o -`
-means stdout. `--json` and file output are mutually exclusive. Waits default to
-60 minutes and accept explicit overrides such as `--timeout 30s` / `--timeout 10m`.
-Before waiting, the CLI reminds the user that Ctrl+C stops only the local wait and prints the exact
-scan-specific `patch get ... --wait` recovery command.
-
-Create a backend GitHub PR (one finding uses the single endpoint; several use
-one batch PR with one commit per finding):
-
-```
-nebu findings pr create <finding-id>... --scan <scan-id> [--timeout 10m]
-nebu findings pr status [<finding-id>] --scan <scan-id> [--wait]
-```
-
-PR creation waits for the PR job by default, but it never generates patches. Every selected
-finding must already have an available patch; otherwise the error prints the exact `patch generate`
-or `patch get --wait` command needed for each blocked finding. A custom `--commit-message` is valid
-only for one finding. The CLI does not touch local Git or mark findings fixed on its own; agents
-follow the triage synchronization rules above after application or merge, verification, and user
-acceptance.
-
-## Running a scan
-
-```
-nebu scans run --path . --yes --max-cost 20 --cost-cap 30 --wait
-```
-
-Steps performed: index + zip the directory (respects `.nebuignore`) →
-upload as a new repository (`--project <p>` attaches it; `--repo <r>`
-reuses an existing repository instead of uploading) → wait for snapshot →
-cost estimate → server-issued fixed-price quote → consent gate → create scan.
-
-**Cost consent (scans cost real money):**
-- The estimate always prints first: `estimated cost: $1.86 (p10 $0.70 – p90 $4.91), …`
-- The binding offer prints next: `quoted price: $1.92 USD`. Confirmation
-  and automation limits use this server-issued price.
-- `--max-cost <usd>`: abort with **exit 6** if the quoted price exceeds it;
-  otherwise counts as consent. This is the safest flag for agents.
-- `--yes`: unconditional consent. Without either, a non-TTY run exits 6.
-- `--cost-cap <usd>`: independent server-side spend cap (also settable
-  later via `nebu scans cost-cap <scan_id> <usd>`).
-- `--estimate-only` (or `nebu scans estimate`): print the estimate and
-  stop — free, no scan created.
-
-**Watching progress:**
-- default: prints `scan created: scan_…` and returns immediately; poll
-  with `nebu scans get <scan_id> -s`.
-- `--wait`: poll until done; state changes on stderr, final scan detail
-  on stdout.
-- `--follow`: stream backend events; with `--json` each event is one
-  NDJSON line on stdout and the final scan detail is the last line.
-- `nebu scans follow <scan_id>` attaches to an already-running scan.
-
-## Scan control
-
-```
-nebu scans pause|resume|cancel|retry <scan_id>    # prints "scan_… <new state>"
-nebu scans cost-cap <scan_id> <usd>
-```
-
-## Exit codes
-
-| code | meaning | typical reaction |
+| exit | meaning | what to do |
 |---|---|---|
-| 0 | success | — |
-| 1 | API/transport error (incl. permission denials and billing refusals — message says why) | read stderr; for a billing refusal, tell the user the `Next:` line (add funds, upgrade, …) |
-| 2 | usage error / ambiguous name / ambiguous cloud scope | fix arguments, or use the id (`--project`/`--env`) |
-| 3 | not authenticated: no credential, or the sign-in ended (`error[session_ended]` says why) | do what the message says: usually `nebu auth login`, or set `NEBUSEC_PLATFORM_API_KEY` |
-| 4 | not found (bad id or unknown name) | check the id |
-| 5 | scan ended failed/cancelled under `--wait`/`--follow` | inspect `failure_reason` in the printed detail |
-| 6 | cost consent refused or `--max-cost` exceeded | raise `--max-cost` or pass `--yes` |
-| 7 | patch/PR wait timed out; backend work continues | run the recovery command printed on stderr |
-| 130 | local wait interrupted with Ctrl+C; backend work continues | run the recovery command printed on stderr |
+| 0 | success | |
+| 1 | refused or failed (permission level, billing, a quote that cannot launch, a skipped finding, network) | read the message and `Next:`; a level or billing refusal is the user's |
+| 2 | wrong usage, an ambiguous name, or a duplicate | fix the arguments (`--help`), use the id, or use the existing object named |
+| 3 | not signed in, or the sign-in ended | sign in again ([setup.md](references/setup.md)) |
+| 4 | not found | check the id or name |
+| 5 | a waited scan, `repos add --wait`'s fetch, or a `--ref`/`--commit`/`--pr`/diff snapshot failed or was cancelled | read the detail's reason |
+| 6 | price not approved: no `--yes` or `--max-cost`, or a quote above `--max-cost` or not in USD with it | show the user the quoted price and ask |
+| 7 | a wait timed out; the work goes on | run the command stderr prints, if any, or look with `repos get` or `scans get` |
+| 8 | a step the user must take in the web app | give the user the `Next:` page and stop |
+| 130 | a local wait was interrupted; the work goes on | as for 7 |
 
-Errors print as `error[<code>]: <message> (request_id=…)` on stderr —
-include the `request_id` when reporting backend issues.
+`error[cli_upgrade_required]` means this `nebu` is too old for the platform: run `nebu upgrade` (or the command the message names), then retry.
+`error[session_ended]` (exit 3) says why the sign-in ended; the user signs in again.
